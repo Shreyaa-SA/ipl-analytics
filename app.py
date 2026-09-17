@@ -278,7 +278,6 @@ with tab_predict:
         X_input = pd.DataFrame([row])[feature_cols]
         proba_team1 = model.predict_proba(X_input)[0, 1]
         favored = team1 if proba_team1 >= 0.5 else team2
-        st.balloons()
 
         fig = go.Figure(
             go.Bar(
