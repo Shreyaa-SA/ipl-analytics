@@ -145,6 +145,23 @@ def h2h_stat(t1, t2):
     return (sub["winner"] == t1).sum() / len(sub)
 
 
+def h2h_matches(t1, t2):
+    """Every past meeting between t1 and t2, oldest first — used to build the year-by-year view."""
+    sub = matches[((matches["team1"] == t1) & (matches["team2"] == t2)) | ((matches["team1"] == t2) & (matches["team2"] == t1))].copy()
+    if sub.empty:
+        return sub
+    if "season" in sub.columns:
+        sub["season_year"] = sub["season"].astype(str).str.extract(r"(\d{4})")
+    elif "date" in sub.columns:
+        sub["season_year"] = pd.to_datetime(sub["date"], errors="coerce").dt.year.astype("Int64").astype(str)
+    else:
+        sub["season_year"] = "?"
+    sort_col = "date" if "date" in sub.columns else "season_year"
+    sub = sub.sort_values(sort_col)
+    cols = [c for c in ["season_year", "date", "venue", "winner"] if c in sub.columns]
+    return sub[cols]
+
+
 def recent_form(team, n=10):
     sub = matches[(matches["team1"] == team) | (matches["team2"] == team)].sort_values("date").tail(n)
     if len(sub) == 0:
@@ -201,6 +218,39 @@ with tab_predict:
     c3.markdown(f'<div class="stat-card"><div class="big">{team_stat(team2)*100:.0f}%</div><div class="small">{team2} career win rate</div></div>', unsafe_allow_html=True)
 
     st.write("")
+
+    # ── Year-by-year head-to-head between the two selected teams ───────
+    h2h_df = h2h_matches(team1, team2)
+    if h2h_df.empty:
+        st.caption(f"📅 {team1} and {team2} haven't played each other yet in this dataset.")
+    else:
+        with st.expander(f"📅 {team1} vs {team2} — year-by-year history ({len(h2h_df)} matches)", expanded=True):
+            display_df = h2h_df.rename(columns={
+                "season_year": "Year", "date": "Date", "venue": "Venue", "winner": "Winner",
+            })
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+            yearly = h2h_df.copy()
+            yearly["team1_won"] = (yearly["winner"] == team1).astype(int)
+            yearly_pct = yearly.groupby("season_year")["team1_won"].mean().reset_index()
+            yearly_pct["win_pct"] = yearly_pct["team1_won"] * 100
+
+            fig_h2h = go.Figure(
+                go.Bar(
+                    x=yearly_pct["season_year"],
+                    y=yearly_pct["win_pct"],
+                    marker_color=team_color(team1),
+                    text=[f"{v:.0f}%" for v in yearly_pct["win_pct"]],
+                    textposition="auto",
+                )
+            )
+            fig_h2h.update_layout(
+                title=f"{team1} win % vs {team2}, by year",
+                yaxis_title="Win %", yaxis_range=[0, 100], xaxis_title="Year",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#eaeef5", height=280,
+            )
+            st.plotly_chart(fig_h2h, use_container_width=True)
 
     if st.button("🔮 Predict win probability", type="primary", use_container_width=True):
         row = {
