@@ -6,6 +6,7 @@ pre-match win-probability estimates.
 Run locally with:  streamlit run app.py
 """
 
+import os
 import joblib
 import numpy as np
 import pandas as pd
@@ -25,7 +26,10 @@ TEAM_RENAME = {
 @st.cache_resource
 def load_artifacts():
     bundle = joblib.load("ipl_win_predictor.pkl")
-    matches = pd.read_csv("data/matches.csv")
+    # Handle both layouts: data/matches.csv (intended) or matches.csv (if uploaded flat)
+    matches_path = "data/matches.csv" if os.path.exists("data/matches.csv") else "matches.csv"
+    matches = pd.read_csv(matches_path)
+    # deliveries not needed at inference time — kept in data/deliveries.csv.gz for reference
     for col in ["team1", "team2", "toss_winner", "winner"]:
         matches[col] = matches[col].replace(TEAM_RENAME)
     return bundle, matches
